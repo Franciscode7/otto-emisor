@@ -1,0 +1,20 @@
+# Ignorar el entorno virtual de Python
+venv/
+.venv/
+env/
+
+__pycache__/
+
+.env
+
+receptor22.py
+receptor33.py
+
+receptor_errors.log
+receptor_output.log
+
+run_bot.vbs
+start_bot.bat
+
+originalbotto.py
+

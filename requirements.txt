@@ -1,0 +1,5 @@
+aiohttp==3.8.5
+openai==0.28.0
+python-dotenv==1.2.2
+python-telegram-bot==22.8
+Requests==2.34.2
