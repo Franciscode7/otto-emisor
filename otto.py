@@ -4,7 +4,11 @@ import requests
 import json
 import re
 import aiohttp
+import html
 from dotenv import load_dotenv
+
+from acciones.data import accionesjson
+
 
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
@@ -20,7 +24,8 @@ from AI.ia import otto, ottochat, system_prompt, chat_prompt
 
 
 
-
+timeout = aiohttp.ClientTimeout(total=5)
+accionespermitidas = accionesjson()
 iaMain = "llama3.1:8b"
 iaSecond = "llama3.2:latest"
 iaPhi = "phi3.5:3.8b-mini-instruct-q6_K"
@@ -134,156 +139,114 @@ async def manejar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # ---------- OLLAMA ----------
         resAI = await generar_comando_otto(user_text)
 
-        # data = resAI.json()
-
-
-        # if "error" in data:
-        #     await update.message.reply_text(
-        #         f"Error Ollama:\n{data['error']}"
-        #     )
-        #     return
-
-
-        # if "response" not in data:
-        #     await update.message.reply_text(
-        #         f"Respuesta inválida:\n{data}"
-        #     )
-        #     return
-
-
-        # respuesta = data["response"]
-
-
         # -------- Extraer primer JSON válido --------
-
-        match = re.search(
-            r'\{.*?\}',
-            resAI,
-            re.DOTALL
-        )
-
-        if not match:
-            await update.message.reply_text(
-                resAI
-            )
-            return
-
-
-        json_texto = match.group(0)
-
-        datos_ia = json.loads(json_texto)
-
-
-        accion = datos_ia.get("accion")
-        valor  = datos_ia.get("valor")
-
-
-        # -------- Whitelist --------
-
-        acciones_validas = {
-            "abrir_url",
-            "youtube",
-            "brillo",
-            "volumen",
-            "nota",
-            "abrir_app",
-            "cerrar_app"
-        }
-
-        if accion not in acciones_validas:
-
-            # await update.message.reply_text(
-            #     f"Acción no permitida: {accion}"
-            # )
-            # return
-            
-            # 1. Indicamos que estamos procesando (opcional, da mejor experiencia)
-            await update.message.chat.send_action(action="typing")
-            
-            # 2. Llamamos a la lógica de tu IA normal
-            # Aquí pasas el texto original del usuario que guardaste antes
-            respuesta_ia = await generar_respuesta_ollama(update.message.text)
-            
-            # 3. Respondemos con lo que dijo la IA
-            await update.message.reply_text(respuesta_ia)
-            return
-
-
-        # -------- Sanear brillo/volumen --------
-
-        if accion in ("brillo", "volumen"):
-
-            try:
-                valor = int(valor)
-
-                if valor < 0:
-                    valor = 0
-
-                if valor > 100:
-                    valor = 100
-
-            except:
-                await update.message.reply_text(
-                    "Valor inválido."
-                )
-                return
-
-
-        payload = {
-            "accion": accion,
-            "valor": valor
-        }
-
-
-        # -------- Enviar a tu Flask --------
-
+        
+        
         try:
-
-            r = requests.post(
-                LAPTOP_API,
-                json=payload,
-                headers=API_HEADERS,
-                timeout=10
-            )
-
-            if r.ok:
-
+            # 1. Si la IA respondió un JSON válido, esto funcionará a la primera
+            comando = json.loads(resAI)
+            
+    
+            # 2ª Comprobación (Manual de Estructura): ¿Tiene el formato de un comando de Otto?
+            if isinstance(comando, dict) and "accion" in comando:
+                
+                #logica de ejecucion
+                datos_ia = comando
+                            
+                accion = datos_ia.get("accion")
+                valor  = datos_ia.get("valor")
+        
+        
+                # -------- Whitelist --------
+        
+                if accion not in accionespermitidas:
+        
+                    await update.message.reply_text(f"❌ Comando no valido o inexistente")
+                    return
+                
+                
+                # -------- Sanear brillo/volumen --------
+                if accion in ("brillo", "volumen"):
+                
+                    try:
+                        valor = int(valor)
+                        print("este es el valor")
+                        print (valor)
+        
+                        if valor < 0:
+                            await update.message.reply_text(
+                                """⚠️ Comando reconocido, pero el valor está por 
+                                debajo del rango válido."""
+                            )
+                            return
+        
+                        if valor > 100:
+                            await update.message.reply_text(
+                                """⚠️ Comando reconocido, pero el valor está por 
+                                encima del rango válido."""
+                            )
+                            return
+        
+                    except:
+                        await update.message.reply_text(
+                            "Valor inválido."
+                        )
+                        return
+                #
+                #Estrcuturacion de los datos antes del envio al pc
+                payload = {
+                            "accion": accion,
+                            "valor": valor
+                        }
+                
+                
+                
+                # -------- Enviar a Flask --------
                 try:
-                    api_resp = r.json()
-                    msg = api_resp.get(
-                        "msg",
-                        "OK"
-                    )
-
-                except:
-                    msg = r.text
-
-
-                await update.message.reply_text(
-                    f"✅ {msg}"
-                )
-
-
+                    async with aiohttp.ClientSession(timeout=timeout) as session:
+                        async with session.post(LAPTOP_API, json=payload, headers=API_HEADERS) as r:
+                            
+                            if r.status == 200:
+                                try:
+                                    api_resp = await r.json()
+                                    msg = api_resp.get("msg", "OK")
+                                except Exception:
+                                    msg = await r.text()
+    
+                                print("respuesta de texto comando")
+                                await update.message.reply_text(f"🤖 {msg}")
+    
+                            else:
+                                await update.message.reply_text(f"❌ Error API {r.status}")
+    
+                except asyncio.TimeoutError:
+                    await update.message.reply_text("⏱ Timeout con la laptop")
+    
+                except aiohttp.ClientConnectorError:
+                    await update.message.reply_text("🔌 No conecta con la laptop")
+    
+                except aiohttp.ClientError as e:
+                    await update.message.reply_text(f"💥 Error de red: {e}")
+    
+                return
+    
             else:
-
+                
+                await update.message.chat.send_action(action="typing")
+                
                 await update.message.reply_text(
-                    f"❌ Error API {r.status_code}"
+                    f"Acción no permitida: {comando}"
                 )
+                # return
 
-
-        except requests.exceptions.Timeout:
-
-            await update.message.reply_text(
-                "⏱ Timeout con la laptop"
-            )
-
-
-        except requests.exceptions.ConnectionError:
-
-            await update.message.reply_text(
-                "🔌 No conecta con la laptop"
-            )
-
+        except json.JSONDecodeError:
+            # aqui puedes cargar la logica de una IA local para que te genere una respuesta normal,
+            # en modelos LLM pequeños algunas son buenas principalmente para estrcuturas json y otra para chat
+            await update.message.chat.send_action(action="typing")
+            await update.message.reply_text(resAI)
+            
+            return
+        
 
     except Exception as e:
 
@@ -291,8 +254,6 @@ async def manejar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💥 Error:\n{e}"
         )
         
-
-
 
 
 # ------------ MAIN ------------
@@ -313,5 +274,5 @@ if __name__ == "__main__":
         )
     )
 
-    print("🚀 Escuchando..." + "usando" + iaMain)
+    print("🚀 Escuchando...")
     app.run_polling()
