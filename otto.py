@@ -6,6 +6,7 @@ import re
 import aiohttp
 import html
 from dotenv import load_dotenv
+from pprint import pprint
 
 from acciones.data import accionesjson
 
@@ -164,6 +165,26 @@ async def manejar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await update.message.reply_text(f"❌ Comando no valido o inexistente")
                     return
                 
+                if accion in ("crear_py"):
+                    try:
+                        payload = json.dumps({"accion": accion, "valor": valor})
+                        pprint(payload)
+                        # sys.exit()
+                        
+                    except:
+                        await update.message.reply_text(
+                            "No se pudo procesar."
+                        )
+                        return
+                    
+                    
+                if accion in ("trabajar"):
+                    
+                    if valor not in ["portafolio", "propuestas_otto"]:
+                        
+                        await update.message.reply_text("No es carpeta valida.")
+                        return  # Corta la ejecución aquí si no es válida
+                        
                 
                 # -------- Sanear brillo/volumen --------
                 if accion in ("brillo", "volumen"):
@@ -193,7 +214,7 @@ async def manejar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         )
                         return
                 #
-                #Estrcuturacion de los datos antes del envio al pc
+                #Estructuracion de los datos antes del envio al pc
                 payload = {
                             "accion": accion,
                             "valor": valor
