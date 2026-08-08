@@ -4,7 +4,7 @@ import requests
 import json
 import re
 import aiohttp
-import html
+import io
 from dotenv import load_dotenv
 from pprint import pprint
 
@@ -231,11 +231,27 @@ async def manejar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 try:
                                     api_resp = await r.json()
                                     msg = api_resp.get("msg", "OK")
+                                    
+                                    print("respuesta de texto comando")
+                                    await update.message.reply_text(f"🤖 {msg}")
+                                    
+                                except Exception:
+                                    msg = await r.text()
+                                 
+                                    
+                                try:
+                                    image_bytes = await response.read()
+                                    image_file = io.BytesIO(image_bytes)
+                                    image_file.name = "captura.png"
+                                    
+                                    await update.message.reply_photo(
+                                        photo=image_file,
+                                        caption="🤖 Aquí tienes la captura solicitada.")
+                                    
                                 except Exception:
                                     msg = await r.text()
     
-                                print("respuesta de texto comando")
-                                await update.message.reply_text(f"🤖 {msg}")
+                               
     
                             else:
                                 await update.message.reply_text(f"❌ Error API {r.status}")
