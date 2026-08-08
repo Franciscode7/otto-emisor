@@ -39,6 +39,8 @@ TOKEN_TELEGRAM = os.getenv("TOKEN_TELEGRAM")
 
 OLLAMA_URL = os.getenv("OLLAMA_URL")
 
+HA_WEBHOOK_URL = os.getenv("HA_WEBHOOK_URL")
+
 LAPTOP_API = os.getenv("LAPTOP_API")
 
 API_HEADERS = {
@@ -213,12 +215,42 @@ async def manejar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             "Valor inválido."
                         )
                         return
-                #
+                
                 #Estructuracion de los datos antes del envio al pc
                 payload = {
                             "accion": accion,
                             "valor": valor
                         }
+                
+                if accion in ("tv"):
+                    # -------- Enviar a home assistant --------
+                    try:
+                        if valor not in ["encender", "apagar","musica"]:          
+                            await update.message.reply_text("No es carpeta valida.")
+                            return  # Corta la ejecución aquí si no es válida
+                        
+                        async with aiohttp.ClientSession(timeout=timeout) as session:
+                            # Apuntamos a la URL de tu Webhook de Home Assistant
+                            async with session.post(HA_WEBHOOK_URL, json=payload, headers=API_HEADERS) as r:
+                                
+                                if r.status == 200:
+                                    print("Webhook ejecutado correctamente en Home Assistant")
+                                    # Respuesta amigable para el usuario en Telegram
+                                    await update.message.reply_text("📺 Comando enviado a la TV...")
+    
+                                else:
+                                    await update.message.reply_text(f"❌ Error en Home Assistant: HTTP {r.status}")
+    
+                    except asyncio.TimeoutError:
+                        await update.message.reply_text("⏱ Timeout: Home Assistant no respondió a tiempo.")
+    
+                    except aiohttp.ClientConnectorError:
+                        await update.message.reply_text("🔌 No se pudo conectar con Home Assistant (revisa el túnel/red).")
+    
+                    except aiohttp.ClientError as e:
+                        await update.message.reply_text(f"💥 Error de red: {e}")
+                        
+                    return
                 
                 
                 
