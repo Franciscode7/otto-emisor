@@ -260,34 +260,40 @@ async def manejar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         async with session.post(LAPTOP_API, json=payload, headers=API_HEADERS) as r:
                             
                             if r.status == 200:
-                                try:
-                                    api_resp = await r.json()
-                                    msg = api_resp.get("msg", "OK")
-                                    
-                                    print("respuesta de texto comando")
-                                    await update.message.reply_text(f"🤖 {msg}")
-                                    
-                                except Exception:
-                                    msg = await r.text()
-                                 
-                                    
-                                try:
-                                    image_bytes = await response.read()
-                                    image_file = io.BytesIO(image_bytes)
-                                    image_file.name = "captura.png"
-                                    
-                                    await update.message.reply_photo(
-                                        photo=image_file,
-                                        caption="🤖 Aquí tienes la captura solicitada.")
-                                    
-                                except Exception:
-                                    msg = await r.text()
-    
-                               
-    
+                                # Obtenemos el tipo de contenido que respondió Flask (ej. 'application/json' o 'image/png')
+                                content_type = r.headers.get("Content-Type", "")
+                                
+                                if "image" in content_type:
+                                    # Si Flask respondió con una imagen (send_file)
+                                    try:
+                                        image_bytes = await r.read()
+                                        image_file = io.BytesIO(image_bytes)
+                                        image_file.name = "captura.png"
+                                        
+                                        await update.message.reply_photo(
+                                            photo=image_file,
+                                            caption="🤖 Aquí tienes la captura solicitada."
+                                        )
+                                    except Exception as e:
+                                        await update.message.reply_text(f"❌ Error al procesar la imagen recibida: {e}")
+                                        
+                                else:
+                                    # Si Flask respondió con un JSON normal de texto
+                                    try:
+                                        api_resp = await r.json()
+                                        msg = api_resp.get("msg", "OK")
+                                        print("Respuesta de texto comando")
+                                        await update.message.reply_text(f"🤖 {msg}")
+                                        
+                                    except Exception:
+                                        # Por si acaso llega texto plano inesperado
+                                        msg = await r.text()
+                                        await update.message.reply_text(f"🤖 {msg}")
+                                        
                             else:
                                 await update.message.reply_text(f"❌ Error API {r.status}")
-    
+                                
+                                
                 except asyncio.TimeoutError:
                     await update.message.reply_text("⏱ Timeout con la laptop")
     
