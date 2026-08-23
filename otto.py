@@ -7,22 +7,18 @@ import aiohttp
 import io
 from dotenv import load_dotenv
 from pprint import pprint
-
-from acciones.data import accionesjson
-
+import base64
+import sys
 
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
-import sys
+from acciones.data import accionesjson
+from AI.ia import otto, ottochat, system_prompt, chat_prompt, ottovisor
 from os import path
 
 # Aseguramos que Python pueda ver la carpeta raíz del proyecto
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-
-# Importación directa y limpia desde la carpeta hermana
-from AI.ia import otto, ottochat, system_prompt, chat_prompt
-
 
 
 timeout = aiohttp.ClientTimeout(total=5)
@@ -260,35 +256,36 @@ async def manejar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         async with session.post(LAPTOP_API, json=payload, headers=API_HEADERS) as r:
                             
                             if r.status == 200:
-                                # Obtenemos el tipo de contenido que respondió Flask (ej. 'application/json' o 'image/png')
-                                content_type = r.headers.get("Content-Type", "")
-                                
-                                if "image" in content_type:
-                                    # Si Flask respondió con una imagen (send_file)
-                                    try:
-                                        image_bytes = await r.read()
+                                try:
+                                    # Intentamos parsear como JSON
+                                    api_resp = await r.json()
+                                    
+                                    # 1. Comprobamos si la respuesta trae una captura de pantalla en base64
+                                    if "image_base64" in api_resp:
+                                        image_base64 = api_resp["image_base64"]
+                                        
+                                        # Procesamos con la IA
+                                        descripcion = ottovisor(image_base64)
+                                        
+                                        # Reconstruimos los bytes para Telegram
+                                        image_bytes = base64.b64decode(image_base64)
                                         image_file = io.BytesIO(image_bytes)
                                         image_file.name = "captura.png"
                                         
                                         await update.message.reply_photo(
                                             photo=image_file,
-                                            caption="🤖 Aquí tienes la captura solicitada."
+                                            caption=f"🤖 {descripcion}"
                                         )
-                                    except Exception as e:
-                                        await update.message.reply_text(f"❌ Error al procesar la imagen recibida: {e}")
-                                        
-                                else:
-                                    # Si Flask respondió con un JSON normal de texto
-                                    try:
-                                        api_resp = await r.json()
+                                    else:
+                                        # 2. Si es un JSON normal de texto (como tenías antes)
                                         msg = api_resp.get("msg", "OK")
                                         print("Respuesta de texto comando")
                                         await update.message.reply_text(f"🤖 {msg}")
                                         
-                                    except Exception:
-                                        # Por si acaso llega texto plano inesperado
-                                        msg = await r.text()
-                                        await update.message.reply_text(f"🤖 {msg}")
+                                except Exception:
+                                    # Por si acaso llega texto plano inesperado
+                                    msg = await r.text()
+                                    await update.message.reply_text(f"🤖 {msg}")
                                         
                             else:
                                 await update.message.reply_text(f"❌ Error API {r.status}")

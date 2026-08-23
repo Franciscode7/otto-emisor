@@ -3,6 +3,9 @@ import json
 import re
 from openai import OpenAI
 from dotenv import load_dotenv
+from pathlib import Path
+import base64
+
 
 load_dotenv()
 client = OpenAI(
@@ -63,7 +66,7 @@ def ottochat(mensaje: str, prompt_entrada: str):
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": mensaje}
             ],
-            temperature=0.8  # Excelente para mantenerlo estricto con el formato JSON
+            temperature=0.8 
         )
 
         # ... código de la petición ...
@@ -112,7 +115,39 @@ def otto(mensaje: str, prompt_entrada: str ):
     except Exception as e:
         print(f"❌ Error al conectar con Otto: {e}")
         return None
+    
+    
+def ottovisor(archivo: str):
+    
+    try:
+        respuesta = client.chat.completions.create(
+            model="deepseek-v4-flash-vision-exp",
+            # Aquí metemos el sistema y tu mensaje directo sin depender de variables externas
+              messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Describe la imagen, se breve"},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/png;base64,{archivo}"},
+                            },
+                        ],
+                    }
+                ],
+            temperature=0.8 
+        )
+ 
+        # ... código de la petición ...
+        ia_respuesta = respuesta.choices[0].message.content
+
+        print(ia_respuesta)
+        return ia_respuesta
+        
+    except Exception as e:
+        print(f"❌ Error al conectar con Otto: {e}")
+        return None
 
 # if __name__ == "__main__":
-#     otto("crea una funcion de suma en js", system_prompt())
+#     ottovisor(artchivob64)
     
