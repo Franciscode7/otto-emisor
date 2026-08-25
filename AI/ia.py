@@ -5,6 +5,18 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from pathlib import Path
 import base64
+import aiohttp
+import asyncio
+import sys
+
+# Dentro de AI/ia.py
+# Esto sube una carpeta desde AI (llegando a otto-emisor) y la agrega al sistema
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from acciones.data import accionesjson
+
+
+accionespermitidas = accionesjson()
+
 
 
 load_dotenv()
@@ -47,6 +59,9 @@ def obtener_comportamiento(tipo, ruta_archivo="config.md"):
 
 def system_prompt():
     return obtener_comportamiento("COMPORTAMIENTO_COMANDOS")
+
+def system_prompt_ollama():
+    return obtener_comportamiento("COMPORTAMIENTO_COMANDOS_Local")
 
 def chat_prompt():
     return obtener_comportamiento("COMPORTAMIENTO_CHAT") 
@@ -147,7 +162,84 @@ def ottovisor(archivo: str):
     except Exception as e:
         print(f"❌ Error al conectar con Otto: {e}")
         return None
+    
+async def ollama(mensaje: str, prompt_entrada: str, ia: str):
+    print("🏠 [Local] Intentando extraer comando con Ollama...")
+    url = os.getenv("OLLAMA_URL")
+    
+    prompt_final = f"### Sistema:\n{prompt_entrada}\n\n### Usuario:\n{mensaje}\n\n### Modelo IA usado:\n{ia}"
+    
+    payload = {
+        "model": ia, # Tu modelo principal de comandos
+        "prompt": prompt_final,
+        "stream": False,
+        "options": {"temperature": 0.1}
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, timeout=120) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print("intento de respuesta:")
+                    respuesta = (data.get("response", "").strip())
+                    
+                    try:
+                        # Intentamos parsear la respuesta como JSON
+                        comando = json.loads(respuesta)
+                        print(comando)
+                        accion = comando.get("accion")
+                        
+                        if accion not in accionespermitidas:
+                            print ("comando no permitido")
+                            chatOllama = await ollamachat(mensaje, chat_prompt(), ia)
+                            return chatOllama
+                        else:
+                            return respuesta
+                        
+                    except json.JSONDecodeError:
+                        # Si falla el parseo, significa que Otto decidió responder como chat normal
+                        chatOllama = await ollamachat(mensaje, chat_prompt(), ia)
+                        return chatOllama
+    except Exception as e:
+        print(f"❌ Error en extractor Ollama local: {e}")
+    return ""
+
+
+async def ollamachat(mensaje: str, prompt_entrada: str, ia: str):
+    print("🏠 [Local] Intentando conversacion con Ollama...")
+    url = os.getenv("OLLAMA_URL")
+    
+    prompt_final = f"### Sistema:\n{prompt_entrada}\n\n### Usuario:\n{mensaje}\n\n### Modelo IA usado:\n{ia}"
+    
+    payload = {
+        "model": ia, # Tu modelo principal de comandos
+        "prompt": prompt_final,
+        "stream": False,
+        "options": {"temperature": 0.8}
+    }
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, timeout=30) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print("intento de respuesta:")
+                    respuesta = (data.get("response", "").strip())
+                    return respuesta
+                
+    except Exception as e:
+        print(f"❌ Error en extractor Ollama local: {e}")
+    return ""
+
+# async def main():
+#     iaMain = "phi3.5:3.8b-mini-instruct-q6_K"
+#     userpromt = input("¿Que vamos a hacer?: ")
+#     resultado = await ollama(userpromt, system_prompt_ollama(), iaMain)
+#     print(resultado)
 
 # if __name__ == "__main__":
-#     ottovisor(artchivob64)
+#     # asyncio.run() es el motor que arranca el mundo asíncrono en Python
+#     asyncio.run(main())
+    
+# chat_prompt()
     

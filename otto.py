@@ -14,7 +14,7 @@ from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
 from acciones.data import accionesjson
-from AI.ia import otto, ottochat, system_prompt, chat_prompt, ottovisor
+from AI.ia import otto, system_prompt, ottovisor, ollama, system_prompt_ollama
 from os import path
 
 # Aseguramos que Python pueda ver la carpeta raíz del proyecto
@@ -23,6 +23,8 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
 timeout = aiohttp.ClientTimeout(total=5)
 accionespermitidas = accionesjson()
+
+iaM = "llama3.1:8b"
 iaMain = "llama3.1:8b"
 iaSecond = "llama3.2:latest"
 iaPhi = "phi3.5:3.8b-mini-instruct-q6_K"
@@ -69,63 +71,17 @@ if not ia_local_disponible or forzar_nube:
         print("☁️ [API] Intentando extraer comando con DeepSeek...")
         # Usa tu módulo ia.py importado (que ya tiene sus propios try/except)
         return otto(mensaje_usuario, system_prompt())
-
-    async def generar_respuesta_ollama(mensaje_usuario):
-        print("☁️ [API] Generando charla conversacional con DeepSeek...")
-        return ottochat(mensaje_usuario, chat_prompt())
-    
-    
+  
     
 else:
     async def generar_comando_otto(mensaje_usuario):
-        print("🏠 [Local] Intentando extraer comando con Ollama...")
-        url = os.getenv("OLLAMA_URL")
-        payload = {
-            "model": iaMain, # Tu modelo principal de comandos
-            "prompt": f"{system_prompt()}\n\nOrden del usuario: {mensaje_usuario}",
-            "stream": False,
-            "options": {"temperature": 0.3} # Forzar consistencia JSON
-        }
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, json=payload, timeout=30) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return data.get("response", "").strip()
-        except Exception as e:
-            print(f"❌ Error en extractor Ollama local: {e}")
-        return ""
+        print("☁️ [API] Intentando extraer comando con ollama externo ...")
+        # Usa tu módulo ia.py importado (que ya tiene sus propios try/except)
+        respuesta = await ollama(mensaje_usuario, system_prompt_ollama(), iaMain)
+        print("esto es desde la funcion")
+        print(respuesta)
+        return respuesta
     
-    
-    # ------------ BOT ------------
-    async def generar_respuesta_ollama(prompt_usuario):
-    # La URL apunta al puerto por defecto de Ollama en el mismo contenedor
-        url = os.getenv("OLLAMA_URL")
-
-        payload = {
-            "model": iaPhi, # Asegúrate que sea el nombre exacto de 'ollama list'
-            "prompt": prompt_usuario,
-            "system": "Otto, el mejor asistente y usas el modelo " + iaPhi + ". Responde siempre en español y de manera conscisa",
-            "stream": False,
-            "options": {
-                "num_predict": 80,  # Limita la respuesta a ~75-100 palabras
-                "temperature": 0.8,   # Creatividad moderada
-                "top_k": 20,          # Menos opciones para procesar más rápido
-                "num_thread": 16       # Usa 4 hilos de tu CPU (ajusta según tu LXC)
-            }
-        }
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, json=payload) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return data.get("response", "Lo siento, recibí una respuesta vacía.")
-                    else:
-                        return f"Error de Ollama: Código de estado {response.status}"
-        except Exception as e:
-            return f"No pude conectar con la IA: {str(e)}"
-
 
 async def manejar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
