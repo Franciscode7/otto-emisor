@@ -14,12 +14,20 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from acciones.data import accionesjson
 
+config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config.md'))
+
+# Función rápida para leerlo cuando lo necesites
+def leer_config():
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        return None
 
 accionespermitidas = accionesjson()
 
-
-
 load_dotenv()
+
 client = OpenAI(
     api_key=os.getenv("DEEPSEEK_API_KEY"),
     base_url="https://api.deepseek.com/v1"
@@ -37,7 +45,7 @@ def es_json(cadena):
     
 def obtener_comportamiento(tipo, ruta_archivo="config.md"):
 
-    ruta_config = os.path.normpath(os.getenv("CONFIG_MD_PATH", "config.md"))
+    ruta_config = leer_config()
     
     try:
         with open(ruta_config, "r", encoding="utf-8") as f:
