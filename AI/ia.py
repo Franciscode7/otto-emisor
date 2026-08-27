@@ -18,11 +18,7 @@ config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'con
 
 # Función rápida para leerlo cuando lo necesites
 def leer_config():
-    try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            return f.read()
-    except FileNotFoundError:
-        return None
+    return config_path
 
 accionespermitidas = accionesjson()
 
